@@ -1,0 +1,391 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>body{margin:0}[hidden]{display:none!important}</style></head><body>
+<title>Bug Detective Arena</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=DM+Sans:wght@400;500;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: a single game stage — scoreboard strip on top, one round card centred, controls at the bottom. Bright, single light look by design. */
+:root{
+  color-scheme: light;
+  --bg:#EEF6FF;          /* ice-blue ground */
+  --card:#FFFFFF;
+  --ink:#0B1B3F;         /* deep navy text */
+  --muted:#51607E;
+  --line:#D5E2F3;
+  --coral:#FF4D6D;       /* bug / wrong */
+  --lemon:#FFC93C;       /* highlight */
+  --mint:#05C793;        /* correct */
+  --sky:#1E7BFF;         /* primary accent */
+  --grape:#7A5CFF;       /* higher-order tag */
+  --code:#F5F9FF;
+  --display:"Bricolage Grotesque", "Trebuchet MS", system-ui, sans-serif;
+  --body:"DM Sans", "Segoe UI", system-ui, sans-serif;
+  --mono:"JetBrains Mono", "Consolas", ui-monospace, monospace;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:17px;line-height:1.45;overflow-x:hidden}
+#fx{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:0}
+.wrap{position:relative;z-index:1;max-width:1180px;margin:0 auto;padding-inline:20px;padding-block:18px 28px;display:flex;flex-direction:column;gap:16px;min-height:100%}
+button{font:inherit;cursor:pointer;border:0;background:none;color:inherit}
+button:focus-visible,input:focus-visible{outline:3px solid var(--sky);outline-offset:3px;border-radius:12px}
+
+/* top bar */
+.top{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:10px;font-family:var(--display);font-weight:800;font-size:22px;letter-spacing:-.01em}
+.brand svg{width:34px;height:34px}
+.scores{display:flex;gap:10px;margin-left:auto;flex-wrap:wrap}
+.team{display:flex;align-items:center;gap:10px;background:var(--card);border:2px solid var(--line);border-radius:999px;padding:6px 8px 6px 14px;min-width:0;transition:transform .25s}
+.team .nm{font-weight:700;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:130px}
+.team .pt{font-family:var(--display);font-weight:800;font-size:22px;min-width:44px;text-align:center;font-variant-numeric:tabular-nums;border-radius:999px;padding:2px 10px;color:#fff}
+.team.bump{transform:scale(1.08)}
+.t0 .pt{background:var(--coral)} .t1 .pt{background:var(--sky)} .t2 .pt{background:var(--mint)}
+.iconbtn{width:42px;height:42px;border-radius:50%;background:var(--card);border:2px solid var(--line);display:grid;place-items:center}
+.iconbtn svg{width:20px;height:20px}
+
+/* progress */
+.prog{display:flex;gap:6px}
+.prog i{flex:1;height:8px;border-radius:99px;background:var(--line);transition:background .3s}
+.prog i.done{background:var(--sky)} .prog i.now{background:var(--lemon)}
+
+/* stage card */
+.stage{background:var(--card);border:2px solid var(--line);border-radius:28px;padding:26px clamp(18px,3vw,36px);box-shadow:0 18px 40px -24px rgba(11,27,63,.35);display:flex;flex-direction:column;gap:18px;animation:pop .45s cubic-bezier(.2,1.4,.4,1)}
+@keyframes pop{from{transform:translateY(14px) scale(.98);opacity:.6}to{transform:none;opacity:1}}
+.meta{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.tag{font-size:12px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;padding:6px 12px;border-radius:999px}
+.tag.round{background:var(--ink);color:#fff}
+.tag.bloom{background:#EDE8FF;color:var(--grape)}
+.tag.kind{background:#E3F0FF;color:var(--sky)}
+.timer{margin-left:auto;display:flex;align-items:center;gap:10px}
+.ring{width:58px;height:58px;position:relative}
+.ring svg{width:100%;height:100%;transform:rotate(-90deg)}
+.ring b{position:absolute;inset:0;display:grid;place-items:center;font-family:var(--display);font-weight:800;font-size:20px;font-variant-numeric:tabular-nums}
+.ring.low b{color:var(--coral)}
+h1.q{font-family:var(--display);font-weight:800;font-size:clamp(24px,3.1vw,38px);line-height:1.12;letter-spacing:-.015em;text-wrap:balance;margin:0}
+.scenario{color:var(--muted);font-size:18px;margin:-6px 0 0;max-width:70ch}
+.body{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:22px;align-items:start}
+.body.solo{grid-template-columns:minmax(0,1fr)}
+
+/* code panel */
+.code{background:var(--code);border:2px solid var(--line);border-radius:18px;overflow:hidden;min-width:0}
+.code .bar{display:flex;align-items:center;gap:7px;padding:10px 14px;border-bottom:2px solid var(--line);font-family:var(--mono);font-size:13px;color:var(--muted)}
+.code .bar i{width:11px;height:11px;border-radius:50%;display:inline-block}
+.code pre{margin:0;padding:12px 0;overflow-x:auto;font-family:var(--mono);font-size:clamp(14px,1.45vw,18px);line-height:1.75}
+.ln{display:flex;gap:14px;padding:0 16px;border-left:5px solid transparent;transition:background .2s,border-color .2s}
+.ln .n{color:#9AA9C2;user-select:none;min-width:1.4em;text-align:right}
+.ln.click{cursor:pointer}
+.ln.click:hover{background:#FFF6D9}
+.ln.pick{background:#FFF0C2;border-left-color:var(--lemon)}
+.ln.right{background:#DDFBF1;border-left-color:var(--mint)}
+.ln.wrong{background:#FFE3E9;border-left-color:var(--coral)}
+.k{color:#7A3FF2}.s{color:#0B8A5A}.f{color:#0B63D6}.d{color:#D2541B}.c{color:#8A97AD;font-style:italic}
+
+/* options */
+.opts{display:grid;gap:12px;min-width:0}
+.opt{display:flex;align-items:center;gap:14px;text-align:left;background:var(--card);border:2px solid var(--line);border-radius:18px;padding:14px 16px;font-size:clamp(16px,1.5vw,19px);font-weight:500;transition:transform .15s,border-color .2s,background .2s;min-width:0}
+.opt:hover{transform:translateY(-2px);border-color:var(--sky)}
+.opt .L{flex:none;width:40px;height:40px;border-radius:12px;display:grid;place-items:center;font-family:var(--display);font-weight:800;font-size:19px;color:#fff}
+.opt:nth-child(1) .L{background:var(--coral)} .opt:nth-child(2) .L{background:var(--sky)} .opt:nth-child(3) .L{background:var(--lemon);color:var(--ink)} .opt:nth-child(4) .L{background:var(--mint)}
+.opt .tx{min-width:0}
+.opt code{font-family:var(--mono);font-size:.92em;background:var(--code);padding:1px 6px;border-radius:6px}
+.opt.pick{border-color:var(--lemon);background:#FFF8E1}
+.opt.right{border-color:var(--mint);background:#E2FBF2;animation:yes .5s}
+.opt.wrong{opacity:.5}
+@keyframes yes{30%{transform:scale(1.04)}}
+.shake{animation:shake .4s}
+@keyframes shake{25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+
+/* think + reveal */
+.think{display:flex;gap:12px;align-items:flex-start;background:#F3EFFF;border-radius:18px;padding:14px 16px;color:#3A2A8C}
+.think svg{flex:none;width:26px;height:26px;margin-top:1px}
+.think b{font-family:var(--display)}
+.reveal{display:flex;gap:12px;align-items:flex-start;background:#E2FBF2;border:2px solid #9CEBD2;border-radius:18px;padding:14px 16px}
+.reveal svg{flex:none;width:28px;height:28px}
+.reveal p{margin:0}
+.reveal code{font-family:var(--mono);background:#fff;padding:1px 6px;border-radius:6px}
+
+/* award */
+.award{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.award span{font-weight:700;color:var(--muted);font-size:14px;letter-spacing:.06em;text-transform:uppercase}
+.give{border:2px solid var(--line);border-radius:999px;padding:8px 14px;font-weight:700;font-size:15px;background:var(--card);transition:transform .15s}
+.give:hover{transform:translateY(-2px)}
+.give.t0{border-color:#FFB3C1}.give.t1{border-color:#A9CBFF}.give.t2{border-color:#9CEBD2}
+
+/* controls */
+.ctrl{display:flex;gap:12px;justify-content:space-between;align-items:center;flex-wrap:wrap}
+.btn{border-radius:16px;padding:14px 22px;font-weight:700;font-size:17px;display:inline-flex;align-items:center;gap:10px;transition:transform .15s,box-shadow .15s}
+.btn:hover{transform:translateY(-2px)}
+.btn.main{background:var(--sky);color:#fff;box-shadow:0 8px 0 #1259C2}
+.btn.main:active{transform:translateY(4px);box-shadow:0 4px 0 #1259C2}
+.btn.alt{background:var(--lemon);color:var(--ink);box-shadow:0 8px 0 #D9A51E}
+.btn.alt:active{transform:translateY(4px);box-shadow:0 4px 0 #D9A51E}
+.btn.ghost{background:var(--card);border:2px solid var(--line)}
+.btn[disabled]{opacity:.45;pointer-events:none}
+.hint{color:var(--muted);font-size:14px}
+kbd{font-family:var(--mono);font-size:12px;background:var(--card);border:1px solid var(--line);border-bottom-width:3px;border-radius:6px;padding:1px 6px}
+
+/* start + end screens */
+.hero{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:28px;align-items:center}
+.hero h1{font-family:var(--display);font-weight:800;font-size:clamp(40px,6vw,76px);line-height:.95;letter-spacing:-.03em;margin:8px 0 14px;text-wrap:balance}
+.hero h1 em{font-style:normal;color:var(--coral);position:relative}
+.hero p{font-size:19px;color:var(--muted);max-width:52ch;margin:0}
+.case{background:var(--code);border:2px dashed #B9CCE6;border-radius:22px;padding:18px;display:grid;gap:12px}
+.case h3{margin:0;font-family:var(--display);font-size:20px}
+.case label{font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.case input{width:100%;font:inherit;font-size:18px;font-weight:700;padding:10px 14px;border-radius:12px;border:2px solid var(--line);background:#fff;color:var(--ink)}
+.rules{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.rule{background:var(--card);border:2px solid var(--line);border-radius:18px;padding:14px}
+.rule b{display:block;font-family:var(--display);font-size:18px;margin-bottom:2px}
+.rule small{color:var(--muted);font-size:15px}
+.podium{display:flex;justify-content:center;align-items:flex-end;gap:16px;padding-top:10px;flex-wrap:wrap}
+.pod{width:min(200px,28vw);text-align:center}
+.pod .blk{border-radius:18px 18px 8px 8px;display:grid;place-items:center;color:#fff;font-family:var(--display);font-weight:800;font-size:40px;animation:rise .8s cubic-bezier(.2,1.3,.4,1) both}
+.pod .who{font-weight:700;margin-bottom:6px}
+.pod .sc{font-family:var(--display);font-size:22px;font-weight:800}
+@keyframes rise{from{transform:scaleY(.2);transform-origin:bottom}to{transform:none}}
+.bridge{background:#FFF8E1;border:2px solid #FFE08A;border-radius:18px;padding:16px 18px;font-size:18px}
+
+@media (max-width:820px){
+  .body,.hero{grid-template-columns:minmax(0,1fr)}
+  .rules{grid-template-columns:minmax(0,1fr)}
+  .scores{margin-left:0;width:100%}
+  .team .nm{max-width:90px}
+  .timer{margin-left:0}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<canvas id="fx" aria-hidden="true"></canvas>
+<div class="wrap" id="app"></div>
+
+<script>
+(() => {
+const TEAM_COLORS = ['#FF4D6D', '#1E7BFF', '#05C793'];
+const ROUNDS = [
+  { kind: 'Predict the output', bloom: 'Analyse', time: 45,
+    q: 'What does this Caesar Cipher program print?',
+    scen: 'Last sprint you wrote encryption code. This version has a hidden problem.',
+    file: 'caesar.py',
+    code: [['message = <s>"zoo"</s>'], ['key = <d>3</d>'], ['result = <s>""</s>'], ['<k>for</k> ch <k>in</k> message:'], ['    result += <f>chr</f>(<f>ord</f>(ch) + key)'], ['<f>print</f>(result)']],
+    opts: ['<code>crr</code>', '<code>}rr</code>', '<code>ZRR</code>', 'An error message'], ans: 1,
+    think: 'Why is the first letter wrong but no error appears? What is missing from the shift?',
+    why: 'z + 3 goes past the end of the alphabet and becomes <code>}</code>. There is no <code>% 26</code> to wrap back to a. The program runs, but the answer is wrong: that is a <b>logic error</b>.' },
+  { kind: 'Spot the bug', bloom: 'Analyse', time: 45, lines: true,
+    q: 'This brute-force attack never finds messages encrypted with key 25. Click the guilty line.',
+    scen: 'Brute force should try every possible Caesar key.',
+    file: 'brute_force.py',
+    code: [['<k>def</k> <f>brute_force</f>(cipher):'], ['    <k>for</k> shift <k>in</k> <f>range</f>(<d>1</d>, <d>25</d>):'], ['        text = <f>decrypt</f>(cipher, shift)'], ['        <f>print</f>(shift, text)']],
+    ans: 1,
+    think: 'How many keys does a Caesar cipher have? Which numbers does range(1, 25) really produce?',
+    why: '<code>range(1, 25)</code> stops at 24, so key 25 is never tried. The fix is <code>range(1, 26)</code>. One small number hid a whole bug.' },
+  { kind: 'Judge the claim', bloom: 'Evaluate', time: 40,
+    q: '“My program ran with no error messages, so it has no bugs.” Do you agree?',
+    scen: 'Think back to Round 1 before you vote.',
+    opts: ['Agree: Python always warns us about mistakes', 'Disagree: a program can run and still give the wrong answer', 'Agree: only syntax errors count as bugs', 'Disagree: programs always show an error when they have bugs'], ans: 1,
+    think: 'Give one example from today where the code ran but the result was wrong.',
+    why: 'Logic errors do not stop the program. Round 1 ran perfectly and still printed <code>}rr</code>. We must <b>test</b> results, not just look for red error messages.' },
+  { kind: 'Find the real cause', bloom: 'Analyse', time: 45,
+    q: 'The user types 5 and 7. The program prints Total: 57. What is the real cause?',
+    scen: 'Two numbers went in. A strange answer came out.',
+    file: 'add.py',
+    code: [['num1 = <f>input</f>(<s>"First number: "</s>)'], ['num2 = <f>input</f>(<s>"Second number: "</s>)'], ['total = num1 + num2'], ['<f>print</f>(<s>"Total:"</s>, total)']],
+    opts: ['The <code>+</code> sign is broken', '<code>input()</code> returns text, so <code>+</code> joins the two strings', '<code>print()</code> adds extra digits', 'Python cannot add 5 and 7'], ans: 1,
+    think: 'What is "5" + "7" in Python? How would you prove your idea with one extra line of code?',
+    why: '<code>input()</code> always gives a string, and <code>"5" + "7"</code> is <code>"57"</code>. Adding <code>print(type(num1))</code> proves it. Fix: <code>int(input(...))</code>.' },
+  { kind: 'Choose the smartest move', bloom: 'Evaluate', time: 40,
+    q: 'Your 2,000-line game crashes only on level 9. What is the smartest first step?',
+    scen: 'You have one lesson to fix it. Choose like a professional developer.',
+    opts: ['Rewrite the whole game from the start', 'Run level 9 on its own with a small test save to narrow down the problem', 'Delete level 9 so the crash goes away', 'Add a print() after every one of the 2,000 lines'], ans: 1,
+    think: 'Why is each of the other options a poor choice? What do you lose with each one?',
+    why: 'Shrinking the problem to the part that fails is called <b>problem simplification</b>. It is faster than rewriting, safer than deleting, and clearer than 2,000 prints. You will meet this strategy today.' },
+  { kind: 'Design the test', bloom: 'Create', time: 50,
+    q: 'Which test input EXPOSES the bug in this average program?',
+    scen: 'A test only helps if it can catch the bug. Some inputs hide it.',
+    file: 'average.py',
+    code: [['<k>def</k> <f>average</f>(a, b):'], ['    <k>return</k> a + b / <d>2</d>'], [''], ['<f>print</f>(<f>average</f>(a, b))']],
+    opts: ['<code>a = 0, b = 0</code>', '<code>a = 0, b = 6</code>', '<code>a = 4, b = 4</code>', '<code>a = 0, b = 10</code>'], ans: 2,
+    think: 'Work out the expected answer and the program’s answer for each option. Then write the fixed line.',
+    why: 'For 4 and 4 we expect 4 but get <code>4 + 4 / 2 = 6</code>. When a is 0 the wrong formula gives the right answer by luck, so those tests hide the bug. Fix: <code>(a + b) / 2</code>.' },
+];
+
+let S = { screen: 'start', teams: ['Team Byte', 'Team Pixel', 'Team Logic'], scores: [0, 0, 0], r: 0, picked: null, revealed: false, awarded: [] };
+let timerId = null, tLeft = 0, muted = false, actx = null;
+const app = document.getElementById('app');
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const hl = s => s.replace(/<(k|s|f|d|c)>/g, '<span class="$1">').replace(/<\/(k|s|f|d|c)>/g, '</span>');
+
+const IC = {
+  bug: '<svg viewBox="0 0 48 48" aria-hidden="true"><ellipse cx="24" cy="28" rx="12" ry="14" fill="#FF4D6D"/><circle cx="24" cy="13" r="7" fill="#0B1B3F"/><path d="M24 15v27" stroke="#0B1B3F" stroke-width="2.5"/><circle cx="19" cy="25" r="2.6" fill="#0B1B3F"/><circle cx="29" cy="32" r="2.6" fill="#0B1B3F"/><path d="M12 24l-7-3M12 31H4M13 37l-7 4M36 24l7-3M36 31h8M35 37l7 4M21 8l-3-5M27 8l3-5" stroke="#0B1B3F" stroke-width="2.5" stroke-linecap="round"/></svg>',
+  sound: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16 9a4 4 0 010 6M19 6a8 8 0 010 12"/></svg>',
+  mute: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M17 9l5 6M22 9l-5 6"/></svg>',
+  brain: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4a3 3 0 00-3 3 3 3 0 00-2 5 3 3 0 002 5 3 3 0 003 3V4zM15 4a3 3 0 013 3 3 3 0 012 5 3 3 0 01-2 5 3 3 0 01-3 3V4z"/></svg>',
+  ok: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="#05C793"/><path d="M7 12.5l3.2 3.2L17 9" stroke="#fff" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  play: '<svg viewBox="0 0 24 24" width="20" height="20"><path d="M7 4l13 8-13 8z" fill="currentColor"/></svg>',
+};
+
+/* ---------- sound ---------- */
+function beep(freqs, dur = 0.12, type = 'sine', gap = 0.09) {
+  if (muted) return;
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    freqs.forEach((f, i) => {
+      const o = actx.createOscillator(), g = actx.createGain(), t = actx.currentTime + i * gap;
+      o.type = type; o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.18, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(g); g.connect(actx.destination); o.start(t); o.stop(t + dur + 0.02);
+    });
+  } catch (e) {}
+}
+const sfx = { pick: () => beep([660], .08), right: () => beep([523, 659, 784, 1046], .16), wrong: () => beep([220, 180], .2, 'square', .12), tick: () => beep([880], .04, 'triangle'), point: () => beep([988, 1318], .1) };
+
+/* ---------- background canvas: drifting bugs + confetti ---------- */
+const cv = document.getElementById('fx'), cx = cv.getContext('2d');
+const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+let W = 0, H = 0, bugs = [], conf = [];
+function size() { W = cv.width = innerWidth * devicePixelRatio; H = cv.height = innerHeight * devicePixelRatio; }
+addEventListener('resize', size); size();
+const palette = ['#FF4D6D', '#1E7BFF', '#05C793', '#FFC93C', '#7A5CFF'];
+for (let i = 0; i < 14; i++) bugs.push({ x: Math.random() * W, y: Math.random() * H, a: Math.random() * 6.28, s: (14 + Math.random() * 16) * devicePixelRatio, v: (.15 + Math.random() * .35) * devicePixelRatio, c: palette[i % 5], w: Math.random() * 6 });
+function drawBug(b, t) {
+  cx.save(); cx.translate(b.x, b.y); cx.rotate(b.a + Math.PI / 2); cx.globalAlpha = .16; cx.fillStyle = b.c; cx.strokeStyle = b.c; cx.lineWidth = b.s * .09; cx.lineCap = 'round';
+  const wig = Math.sin(t / 180 + b.w) * .25;
+  for (const sd of [-1, 1]) for (let k = -1; k <= 1; k++) { cx.beginPath(); cx.moveTo(0, k * b.s * .25); cx.lineTo(sd * b.s * .55, k * b.s * .35 + sd * wig * b.s * .2); cx.stroke(); }
+  cx.beginPath(); cx.ellipse(0, b.s * .1, b.s * .33, b.s * .42, 0, 0, 6.28); cx.fill();
+  cx.beginPath(); cx.arc(0, -b.s * .42, b.s * .2, 0, 6.28); cx.fill(); cx.restore();
+}
+function frame(t) {
+  cx.clearRect(0, 0, W, H);
+  for (const b of bugs) {
+    if (!reduce) { b.a += (Math.sin(t / 2000 + b.w) * .01); b.x += Math.cos(b.a) * b.v; b.y += Math.sin(b.a) * b.v; }
+    if (b.x < -60) b.x = W + 50; if (b.x > W + 60) b.x = -50; if (b.y < -60) b.y = H + 50; if (b.y > H + 60) b.y = -50;
+    drawBug(b, t);
+  }
+  conf = conf.filter(p => p.life > 0);
+  for (const p of conf) { p.vy += .12 * devicePixelRatio; p.x += p.vx; p.y += p.vy; p.r += p.vr; p.life--; cx.save(); cx.translate(p.x, p.y); cx.rotate(p.r); cx.globalAlpha = Math.min(1, p.life / 40); cx.fillStyle = p.c; cx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h); cx.restore(); }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+function burst(n = 140) {
+  if (reduce) return;
+  for (let i = 0; i < n; i++) conf.push({ x: W / 2 + (Math.random() - .5) * W * .4, y: H * .35, vx: (Math.random() - .5) * 14 * devicePixelRatio, vy: (-6 - Math.random() * 9) * devicePixelRatio, r: Math.random() * 6, vr: (Math.random() - .5) * .3, w: (6 + Math.random() * 8) * devicePixelRatio, h: (4 + Math.random() * 5) * devicePixelRatio, c: palette[i % 5], life: 110 + Math.random() * 60 });
+}
+
+/* ---------- timer ---------- */
+function stopTimer() { clearInterval(timerId); timerId = null; }
+function startTimer(sec) {
+  stopTimer(); tLeft = sec; paintRing(sec);
+  timerId = setInterval(() => { tLeft--; paintRing(sec); if (tLeft <= 5 && tLeft > 0) sfx.tick(); if (tLeft <= 0) { stopTimer(); reveal(); } }, 1000);
+}
+function paintRing(total) {
+  const r = document.querySelector('.ring'); if (!r) return;
+  const C = 2 * Math.PI * 24, f = Math.max(0, tLeft) / total;
+  r.querySelector('.arc').setAttribute('stroke-dashoffset', C * (1 - f));
+  r.querySelector('b').textContent = Math.max(0, tLeft);
+  r.classList.toggle('low', tLeft <= 10);
+  r.querySelector('.arc').setAttribute('stroke', tLeft <= 10 ? '#FF4D6D' : '#1E7BFF');
+}
+
+/* ---------- views ---------- */
+function topBar() {
+  const prog = S.screen === 'round' ? `<div class="prog" aria-label="Round ${S.r + 1} of ${ROUNDS.length}">${ROUNDS.map((_, i) => `<i class="${i < S.r ? 'done' : i === S.r ? 'now' : ''}"></i>`).join('')}</div>` : '';
+  return `<div class="top"><div class="brand">${IC.bug}<span>Bug Detective Arena</span></div>
+    <div class="scores">${S.teams.map((t, i) => `<div class="team t${i}" id="team${i}"><span class="nm">${esc(t)}</span><span class="pt">${S.scores[i]}</span></div>`).join('')}
+    <button class="iconbtn" id="mute" aria-label="${muted ? 'Turn sound on' : 'Turn sound off'}">${muted ? IC.mute : IC.sound}</button></div></div>${prog}`;
+}
+function startView() {
+  return topBar() + `<section class="stage"><div class="hero">
+      <div><span class="tag bloom">Warm-up · Sprint 1.5 · Grade 11</span>
+        <h1>Six crime scenes. One <em>bug</em> in each.</h1>
+        <p>Read the evidence, predict what the code does, judge the claims and design a test that catches the bug. Every answer needs a reason.</p></div>
+      <div class="case"><h3>Name your detective teams</h3>
+        ${S.teams.map((t, i) => `<div><label for="tn${i}">Team ${i + 1}</label><input id="tn${i}" maxlength="18" value="${esc(t)}" style="border-color:${TEAM_COLORS[i]}55"></div>`).join('')}</div>
+    </div>
+    <div class="rules">
+      <div class="rule"><b>Think in teams</b><small>Discuss quietly and agree on one answer before the timer ends.</small></div>
+      <div class="rule"><b>+10 for the answer</b><small>The teacher reveals the evidence and awards points.</small></div>
+      <div class="rule"><b>+5 for the reason</b><small>The best explanation of why wins bonus points.</small></div>
+    </div></section>
+    <div class="ctrl"><span class="hint">Tip: <kbd>Space</kbd> reveals, <kbd>→</kbd> next round</span><button class="btn main" id="go">${IC.play} Start the hunt</button></div>`;
+}
+function roundView() {
+  const R = ROUNDS[S.r], hasCode = !!R.code;
+  const codeHtml = hasCode ? `<div class="code"><div class="bar"><i style="background:#FF5F57"></i><i style="background:#FEBC2E"></i><i style="background:#28C840"></i>&nbsp;${R.file}</div><pre>${R.code.map((l, i) => {
+      let cls = 'ln' + (R.lines ? ' click' : '');
+      if (R.lines && S.picked === i) cls += ' pick';
+      if (R.lines && S.revealed) cls += i === R.ans ? ' right' : (S.picked === i ? ' wrong' : '');
+      return `<div class="${cls}" data-line="${i}" ${R.lines ? `role="button" tabindex="0" aria-label="Line ${i + 1}"` : ''}><span class="n">${i + 1}</span><span>${hl(l[0]) || '&nbsp;'}</span></div>`;
+    }).join('')}</pre></div>` : '';
+  const optsHtml = R.opts ? `<div class="opts">${R.opts.map((o, i) => {
+      let cls = 'opt'; if (S.picked === i) cls += ' pick';
+      if (S.revealed) cls += i === R.ans ? ' right' : ' wrong';
+      return `<button class="${cls}" data-opt="${i}"><span class="L">${'ABCD'[i]}</span><span class="tx">${o}</span></button>`;
+    }).join('')}</div>` : '';
+  const C = (2 * Math.PI * 24).toFixed(2);
+  const awards = S.revealed ? `<div class="award"><span>Award points</span>${S.teams.map((t, i) => `<button class="give t${i}" data-give="${i}" data-pts="10">+10 ${esc(t)}</button><button class="give t${i}" data-give="${i}" data-pts="5">+5 reason</button>`).join('')}</div>` : '';
+  return topBar() + `<section class="stage" aria-live="polite">
+    <div class="meta"><span class="tag round">Scene ${S.r + 1} / ${ROUNDS.length}</span><span class="tag kind">${R.kind}</span><span class="tag bloom">${R.bloom}</span>
+      <div class="timer"><div class="ring"><svg viewBox="0 0 56 56"><circle cx="28" cy="28" r="24" stroke="#D5E2F3" stroke-width="6" fill="none"/><circle class="arc" cx="28" cy="28" r="24" stroke="#1E7BFF" stroke-width="6" fill="none" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="0"/></svg><b>${R.time}</b></div></div></div>
+    <h1 class="q">${R.q}</h1><p class="scenario">${R.scen}</p>
+    <div class="body ${hasCode && optsHtml ? '' : 'solo'}">${codeHtml}${optsHtml}</div>
+    ${S.revealed ? `<div class="reveal">${IC.ok}<p>${R.why}</p></div>` : `<div class="think">${IC.brain}<div><b>Think deeper:</b> ${R.think}</div></div>`}
+    ${awards}</section>
+    <div class="ctrl"><button class="btn ghost" id="back" ${S.r === 0 ? 'disabled' : ''}>Back</button>
+      <div style="display:flex;gap:12px;flex-wrap:wrap">${S.revealed ? `<button class="btn main" id="next">${S.r === ROUNDS.length - 1 ? 'See the winners' : 'Next scene'} →</button>` : `<button class="btn alt" id="rev">Reveal the evidence</button>`}</div></div>`;
+}
+function endView() {
+  const order = [0, 1, 2].sort((a, b) => S.scores[b] - S.scores[a]);
+  const heights = [190, 140, 100], place = [order[1], order[0], order[2]], ph = [heights[1], heights[0], heights[2]], lbl = ['2', '1', '3'];
+  return topBar() + `<section class="stage"><span class="tag bloom">Case closed</span>
+    <h1 class="q">${esc(S.teams[order[0]])} ${S.scores[order[0]] === S.scores[order[1]] ? 'share the top spot!' : 'are the top bug detectives!'}</h1>
+    <div class="podium">${place.map((t, i) => `<div class="pod"><div class="who">${esc(S.teams[t])}</div><div class="sc">${S.scores[t]} pts</div><div class="blk" style="height:${ph[i]}px;background:${TEAM_COLORS[t]};animation-delay:${i * .15}s">${lbl[i]}</div></div>`).join('')}</div>
+    <div class="bridge"><b>Today’s mission:</b> every scene hid a different kind of bug. In this lesson you will learn the strategies professionals use to hunt them: print statements, problem simplification, backtracking and bug clustering.</div></section>
+    <div class="ctrl"><button class="btn ghost" id="again">Play again</button><span class="hint">Close this tab to return to the slides</span></div>`;
+}
+function render() {
+  app.innerHTML = S.screen === 'start' ? startView() : S.screen === 'round' ? roundView() : endView();
+  bind();
+}
+
+/* ---------- actions ---------- */
+function bump(i) { const el = document.getElementById('team' + i); if (!el) return; el.classList.add('bump'); setTimeout(() => el.classList.remove('bump'), 260); }
+function reveal() {
+  if (S.revealed) return; stopTimer(); S.revealed = true;
+  const R = ROUNDS[S.r]; const ok = S.picked === R.ans;
+  render();
+  if (S.picked == null || ok) { sfx.right(); burst(); } else { sfx.wrong(); document.querySelector('.stage')?.classList.add('shake'); }
+}
+function goRound(i) { S.screen = 'round'; S.r = i; S.picked = null; S.revealed = false; render(); startTimer(ROUNDS[i].time); }
+function bind() {
+  const $ = id => document.getElementById(id);
+  $('mute') && ($('mute').onclick = () => { muted = !muted; render(); if (S.screen === 'round' && !S.revealed) paintRing(ROUNDS[S.r].time); });
+  if (S.screen === 'start') {
+    S.teams.forEach((_, i) => { const inp = $('tn' + i); inp.oninput = () => { S.teams[i] = inp.value.trim() || `Team ${i + 1}`; document.querySelector(`#team${i} .nm`).textContent = S.teams[i]; }; });
+    $('go').onclick = () => { S.scores = [0, 0, 0]; sfx.point(); goRound(0); };
+  }
+  if (S.screen === 'round') {
+    const R = ROUNDS[S.r];
+    document.querySelectorAll('[data-opt]').forEach(b => b.onclick = () => { if (S.revealed) return; S.picked = +b.dataset.opt; sfx.pick(); const keep = tLeft; render(); tLeft = keep; paintRing(R.time); });
+    document.querySelectorAll('.ln.click').forEach(l => { const f = () => { if (S.revealed) return; S.picked = +l.dataset.line; sfx.pick(); const keep = tLeft; render(); tLeft = keep; paintRing(R.time); }; l.onclick = f; l.onkeydown = e => { if (e.key === 'Enter') f(); }; });
+    $('rev') && ($('rev').onclick = reveal);
+    $('next') && ($('next').onclick = () => S.r < ROUNDS.length - 1 ? goRound(S.r + 1) : (S.screen = 'end', stopTimer(), render(), burst(220), sfx.right()));
+    $('back') && ($('back').onclick = () => S.r > 0 && goRound(S.r - 1));
+    document.querySelectorAll('[data-give]').forEach(b => b.onclick = () => { const i = +b.dataset.give; S.scores[i] += +b.dataset.pts; sfx.point(); document.querySelector(`#team${i} .pt`).textContent = S.scores[i]; bump(i); });
+    if (!S.revealed && timerId) paintRing(R.time);
+  }
+  if (S.screen === 'end') $('again').onclick = () => { S.screen = 'start'; render(); };
+}
+addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  if (S.screen !== 'round') return;
+  if (e.code === 'Space') { e.preventDefault(); if (!S.revealed) reveal(); }
+  if (e.key === 'ArrowRight' && S.revealed) document.getElementById('next')?.click();
+});
+
+/* keep the game state across live updates of the page */
+window.claude?.hot?.snapshot?.(() => ({ S }));
+const boot = data => { if (data && data.S) S = Object.assign(S, data.S); render(); if (S.screen === 'round' && !S.revealed) startTimer(ROUNDS[S.r].time); };
+window.claude?.hot?.ready ? window.claude.hot.ready(boot) : boot(window.claude?.hot?.data ?? {});
+})();
+</script>
+</body></html>
